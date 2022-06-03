@@ -8,6 +8,7 @@ from model_for_cifar import VisionTransformer
 import torch.optim as optim
 import time
 import torchvision.transforms as tfs
+from label_smooth_CE import LabelSmoothingCrossEntropyLoss
 from auto_augment import CIFAR10Policy
 
 
@@ -25,7 +26,7 @@ def main():
     device = torch.device('cuda:{}'.format(0) if torch.cuda.is_available() else 'cpu')
 
     # 3. ** visdom **
-    vis = visdom.Visdom(port=2004)
+    vis = visdom.Visdom(port=2005)
 
     # 4. ** dataset / dataloader **
     transform_cifar = tfs.Compose([
@@ -64,7 +65,8 @@ def main():
     model = VisionTransformer(image_size=32, dim=384, heads=12, layers=7, mlp_size=384, patch_size=8).to(device)
 
     # ** 6. criterion **
-    criterion = nn.CrossEntropyLoss()
+    # criterion = nn.CrossEntropyLoss()
+    criterion = LabelSmoothingCrossEntropyLoss(classes=10, smoothing=0.1)
 
     # ** 7. optimizer **
     # optimizer = optim.SGD(params=model.parameters(),
