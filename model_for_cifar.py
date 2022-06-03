@@ -118,7 +118,7 @@ class Transformer(nn.Module):
 
 # image_size, patch_size, num_classes, dim, depth, heads, mlp_dim, channels = 3, dropout = 0.1, emb_dropout = 0.1
 class VisionTransformer(nn.Module):
-    def __init__(self, image_size, dim, patch_size, layers=7, heads=12, mlp_size=384, num_classes=10):
+    def __init__(self, image_size, dim, patch_size, layers=7, heads=12, mlp_size=384, num_classes=10, dropout=0.0):
         '''
 
         :param dim: 어느 dim 으로 임베딩 하느냐 (D)
@@ -148,9 +148,9 @@ class VisionTransformer(nn.Module):
         torch.nn.init.normal_(self.position_embedding_1, std=.2)  # 확인해보기
         torch.nn.init.normal_(self.position_embedding_, std=.2)  # 확인해보기
         # in the paper, they refer to "we use standard learnable 1D positional embeddings"
-        self.dropout = nn.Dropout(0.1)
+        self.dropout = nn.Dropout(dropout)
 
-        self.transformer = Transformer(dim=self.dim, layers=layers, heads=heads, mlp_size=mlp_size, dropout=0.1)
+        self.transformer = Transformer(dim=self.dim, layers=layers, heads=heads, mlp_size=mlp_size, dropout=dropout)
         self.nn1 = nn.Linear(dim, num_classes)
         torch.nn.init.xavier_uniform_(self.nn1.weight)
         torch.nn.init.normal_(self.nn1.bias, std=1e-6)
