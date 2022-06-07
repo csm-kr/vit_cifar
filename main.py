@@ -10,12 +10,13 @@ import time
 import torchvision.transforms as tfs
 from label_smooth_CE import LabelSmoothingCrossEntropyLoss
 from auto_augment import CIFAR10Policy
+import warmup_scheduler
 
 
 def main():
     # 1. argparser
     parer = argparse.ArgumentParser()
-    parer.add_argument('--epoch', type=int, default=200)
+    parer.add_argument('--epoch', type=int, default=50)
     parer.add_argument('--batch_size', type=int, default=128)
     parer.add_argument('--lr', type=float, default=0.001)
     parer.add_argument('--step_size', type=int, default=100)
@@ -26,13 +27,13 @@ def main():
     device = torch.device('cuda:{}'.format(0) if torch.cuda.is_available() else 'cpu')
 
     # 3. ** visdom **
-    vis = visdom.Visdom(port=2005)
+    vis = visdom.Visdom(port=2006)
 
     # 4. ** dataset / dataloader **
     transform_cifar = tfs.Compose([
         tfs.RandomCrop(32, padding=4),
         tfs.RandomHorizontalFlip(),
-        CIFAR10Policy(),
+        # CIFAR10Policy(),
         tfs.ToTensor(),
         tfs.Normalize(mean=(0.4914, 0.4822, 0.4465),
                       std=(0.2023, 0.1994, 0.2010)),
@@ -62,23 +63,31 @@ def main():
 
     # ** 5. model **
     # num_params : 6.3 M (6304906)
-    model = VisionTransformer(image_size=32, dim=384, heads=12, layers=7, mlp_size=384, patch_size=8).to(device)
+    # model = VisionTransformer(image_size=32, dim=384, heads=12, layers=7, mlp_size=384, patch_size=8).to(device)
+    from model import ViT
+    model = ViT(patch_size=8, image_size=32, num_layers=7,
+                dim=384, mlp_dim=384, num_heads=12,
+                dropout_ratio=0.1,
+                num_classes=10, is_cls_token=True).to(device)
 
     # ** 6. criterion **
-    # criterion = nn.CrossEntropyLoss()
-    criterion = LabelSmoothingCrossEntropyLoss(classes=10, smoothing=0.1)
+    criterion = nn.CrossEntropyLoss()
+    # criterion = LabelSmoothingCrossEntropyLoss(classes=10, smoothing=0.1)
 
     # ** 7. optimizer **
-    # optimizer = optim.SGD(params=model.parameters(),
-    #                       lr=ops.lr,
-    #                       weight_decay=1e-4,
-    #                       momentum=0.9)
+    optimizer = torch.optim.Adam(model.parameters(),
+                                 lr=ops.lr,
+                                 betas=(0.9, 0.999),
+                                 weight_decay=5e-5)
 
-    optimizer = optim.Adam(params=model.parameters(),
-                           lr=ops.lr,
-                           weight_decay=5e-5)
+    # ** scheduler **
+    base_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=ops.epoch, eta_min=1e-5)
+    scheduler = warmup_scheduler.GradualWarmupScheduler(optimizer,
+                                                        multiplier=1.,
+                                                        total_epoch=5,
+                                                        after_scheduler=base_scheduler)
 
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=ops.epoch, eta_min=1e-5)
+
 
     ###################################################
     #             training and pruning
