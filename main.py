@@ -63,12 +63,10 @@ def main():
 
     # ** 5. model **
     # num_params : 6.3 M (6304906)
-    # model = VisionTransformer(image_size=32, dim=384, heads=12, layers=7, mlp_size=384, patch_size=8).to(device)
-    from model import ViT
-    model = ViT(patch_size=8, image_size=32, num_layers=7,
-                dim=384, mlp_dim=384, num_heads=12,
-                dropout_ratio=0.1,
-                num_classes=10, is_cls_token=True).to(device)
+    from model_new import ViT
+    model = ViT(dim=384, mlp_dim=384, num_heads=12, num_layers=7,
+                patch_size=8, image_size=32, is_cls_token=False,
+                dropout_ratio=0.1, num_classes=10).to(device)
 
     # ** 6. criterion **
     criterion = nn.CrossEntropyLoss()
