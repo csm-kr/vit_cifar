@@ -16,7 +16,7 @@ import warmup_scheduler
 def main():
     # 1. argparser
     parer = argparse.ArgumentParser()
-    parer.add_argument('--epoch', type=int, default=50)
+    parer.add_argument('--epoch', type=int, default=200)
     parer.add_argument('--batch_size', type=int, default=128)
     parer.add_argument('--lr', type=float, default=0.001)
     parer.add_argument('--step_size', type=int, default=100)
