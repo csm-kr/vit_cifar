@@ -19,16 +19,12 @@ The goal of this repo is to find the analysis of various components of ViT (e.g.
                 dropout_ratio=0.0, num_classes=10]
        
           
-### 1. Result of ablation study at cifar10  
+### Results of ablation study at cifar10  
 
 |Cls token   | Pos embedding     |  Dataset   | Patch size | Length of sequence |  # params      | Accuracy |Test loss | overfitting epoch  |
-|------------|-------------------| ---------- | ---------- | ------------------ |----------------|----------|----------| ----------------|
-|O           |normal learning 1d |  CIFAR10   | 8 x 8      |  17                |6304906         |75.54     |0.7702    | 35              |
-|X           |normal learning 1d |  CIFAR10   | 8 x 8      |  16                |6304138         |36.5      |98        |10.20|
-|O           |sinuasoid         |  CIFAR10   | 8 x 8      |  34.3     |53.2     |36.9    |98   |10.20 |
-|O           | learning 1d       |  CIFAR10   | 4 x 4      |       | 600 x 600  |**34.7**   |**53.6** |**37.3**|67   |14.85 |
-|O           | learning 2d       |  COCOval2017(minival)  | 600 x 600  |**34.7**   |**53.5** |**37.1**|67   |14.85 |
-|X           | X                 |  CIFAR10   | 8 x 8      |  16              |52.5     |36.5    |98   |10.20 |
-|X           | sinuasoid         |  CIFAR10   | 8 x 8      |  34.3     |53.2     |36.9    |98   |10.20 |
-|X           | learning 1d       |  CIFAR10   | 4 x 4      |       | 600 x 600  |**34.7**   |**53.6** |**37.3**|67   |14.85 |
-|X           | learning 2d       |  COCOval2017(minival)  | 600 x 600  |**34.7**   |**53.5** |**37.1**|67   |14.85 |
+|------------|-------------------| ---------- | ---------- | ------------------ |----------------|----------|----------| -------------------|
+|O           |normal learning 1d |  CIFAR10   | 8 x 8      |  17 (= 4 X 4 + 1)  |6304906         |75.54     |0.7702    | 35                 |
+|X           |normal learning 1d |  CIFAR10   | 8 x 8      |  16                |6304138         |77.01     |0.7054    | 37                 |
+|O           |normal learning 1d |  CIFAR10   | 4 x 4      |  65                |6268042         |-         |-         | -                  |
+|X           |normal learning 1d |  CIFAR10   | 4 x 4      |  64                |6267274         |-         |-         | -                  |
+

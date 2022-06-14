@@ -164,7 +164,7 @@ class ViT(nn.Module):
 if __name__ == '__main__':
     x = torch.randn([2, 3, 32, 32])
     vit = ViT(dim=384, mlp_dim=384, num_heads=12, num_layers=7,
-              patch_size=8, image_size=32, is_cls_token=True,
+              patch_size=4, image_size=32, is_cls_token=False,
               dropout_ratio=0.1, num_classes=10)
 
     # x, attn_mask = vit(x, True)
