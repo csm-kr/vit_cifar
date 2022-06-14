@@ -137,8 +137,8 @@ class TransformerEncoder(nn.Module):
         super(TransformerEncoder, self).__init__()
         self.la1 = nn.LayerNorm(dim)
         # self.msa = MultiHeadSelfAttention(dim, num_heads=num_heads, dropout_ratio=dropout_ratio)
-        # self.msa = MultiHeadAttention(dim, num_heads=num_heads, dropout_ratio=dropout_ratio)
-        self.moa = MultiOrderedAttention(dim, num_order=4, dropout_ratio=dropout_ratio)
+        self.msa = MultiHeadAttention(dim, num_heads=num_heads, dropout_ratio=dropout_ratio)
+        # self.moa = MultiOrderedAttention(dim, num_order=4, dropout_ratio=dropout_ratio)
         self.la2 = nn.LayerNorm(dim)
         self.mlp = nn.Sequential(
             nn.Linear(dim, mlp_dim),
@@ -150,8 +150,8 @@ class TransformerEncoder(nn.Module):
         )
 
     def forward(self, x):
-        # out = self.msa(self.la1(x)) + x
-        out = self.moa(self.la1(x)) + x
+        out = self.msa(self.la1(x)) + x
+        # out = self.moa(self.la1(x)) + x
         out = self.mlp(self.la2(out)) + out
         return out
 

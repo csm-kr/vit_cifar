@@ -11,6 +11,8 @@ import torchvision.transforms as tfs
 from label_smooth_CE import LabelSmoothingCrossEntropyLoss
 from auto_augment import CIFAR10Policy
 import warmup_scheduler
+import numpy as np
+from model_for_cifar import VisionTransformer
 
 
 def main():
@@ -27,13 +29,13 @@ def main():
     device = torch.device('cuda:{}'.format(0) if torch.cuda.is_available() else 'cpu')
 
     # 3. ** visdom **
-    vis = visdom.Visdom(port=2006)
+    vis = visdom.Visdom(port=2007)
 
     # 4. ** dataset / dataloader **
     transform_cifar = tfs.Compose([
         tfs.RandomCrop(32, padding=4),
         tfs.RandomHorizontalFlip(),
-        # CIFAR10Policy(),
+        CIFAR10Policy(),
         tfs.ToTensor(),
         tfs.Normalize(mean=(0.4914, 0.4822, 0.4465),
                       std=(0.2023, 0.1994, 0.2010)),
@@ -62,15 +64,28 @@ def main():
                              batch_size=ops.batch_size)
 
     # ** 5. model **
+    model = VisionTransformer(image_size=32, dim=384, heads=12, layers=7, mlp_size=384, patch_size=8).to(device)
+
     # num_params : 6.3 M (6304906)
     from model_new import ViT
     model = ViT(dim=384, mlp_dim=384, num_heads=12, num_layers=7,
-                patch_size=8, image_size=32, is_cls_token=False,
-                dropout_ratio=0.1, num_classes=10).to(device)
+                patch_size=8, image_size=32, is_cls_token=True,
+                dropout_ratio=0.0, num_classes=10).to(device)
+
+    # from model import ViT
+    # model = ViT(patch_size=8,
+    #             image_size=32,
+    #             num_layers=7,
+    #             dim=384,
+    #             mlp_dim=384,
+    #             num_heads=4,
+    #             dropout_ratio=0.1,
+    #             num_classes=10,
+    #             is_cls_token=True).to(device)
 
     # ** 6. criterion **
-    criterion = nn.CrossEntropyLoss()
-    # criterion = LabelSmoothingCrossEntropyLoss(classes=10, smoothing=0.1)
+    # criterion = nn.CrossEntropyLoss()
+    criterion = LabelSmoothingCrossEntropyLoss(classes=10, smoothing=0.1)
 
     # ** 7. optimizer **
     optimizer = torch.optim.Adam(model.parameters(),
@@ -85,12 +100,7 @@ def main():
                                                         total_epoch=5,
                                                         after_scheduler=base_scheduler)
 
-
-
-    ###################################################
-    #             training and pruning
-    ###################################################
-
+    # ** training **
     print("training...")
     for epoch in range(ops.epoch):
 
@@ -99,14 +109,35 @@ def main():
         # 11. train
         for idx, (img, target) in enumerate(train_loader):
 
-            img = img.to(device)  # [N, 3, 28, 28]
+            img = img.to(device)  # [N, 3, 32, 32]
             target = target.to(device)  # [N]
+            # output, attn_mask = model(img, True)  # [N, 10]
             output = model(img)  # [N, 10]
             loss = criterion(output, target)
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+            ## image show ##
+            # import cv2
+            # attn_mask[0] /= attn_mask[0].max()
+            # attn_mask_numpy_batch_0 = attn_mask[0].detach().cpu().numpy()
+            # attn_mask_numpy_batch_0 = cv2.resize(attn_mask_numpy_batch_0, (100, 100))
+            #
+            # image_numpy_batch_0 = img[0].detach().cpu()
+            # mean = (0.4914, 0.4822, 0.4465)
+            # std = (0.2023, 0.1994, 0.2010)
+            #
+            # # tensor to img
+            # img_vis = np.array(image_numpy_batch_0.permute(1, 2, 0), np.float32)  # C, W, H
+            # img_vis *= std
+            # img_vis += mean
+            # img_vis = cv2.resize(img_vis, (100, 100))
+            # img_vis = img_vis.transpose(2, 0, 1)
+
+            # cv2.imshow('input', attn_mask_numpy_batch_0)
+            # cv2.waitKey()
 
             for param_group in optimizer.param_groups:
                 lr = param_group['lr']
@@ -121,6 +152,19 @@ def main():
                                    title='loss',
                                    legend=['total_loss']))
 
+                # vis.image(attn_mask_numpy_batch_0,
+                #           win='attn',
+                #           # update='append',
+                #           opts=dict(title="batch_0_attn",
+                #                     caption="attention_mean")
+                #           )
+                #
+                # vis.image(img_vis,
+                #           win='image',
+                #           opts=dict(title="batch_0_image",
+                #                     caption="cifar_image")
+                #           )
+
                 print('Epoch : {}\t'
                       'step : [{}/{}]\t'
                       'loss : {}\t'
@@ -132,7 +176,7 @@ def main():
                               lr,
                               time.time() - tic))
 
-        # test
+        # ** test **
         print('Validation of epoch [{}]'.format(epoch))
         model.eval()
         correct = 0
