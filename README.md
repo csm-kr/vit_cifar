@@ -23,8 +23,8 @@ The goal of this repo is to find the analysis of various components of ViT (e.g.
 
 |Cls token   | Pos embedding     |  Dataset   | Patch size | Length of sequence |  # params      | Accuracy |Test loss | overfitting epoch  |
 |------------|-------------------| ---------- | ---------- | ------------------ |----------------|----------|----------| -------------------|
-|O           |normal learning 1d |  CIFAR10   | 8 x 8      |  17 (= 4 X 4 + 1)  |6304906         |75.54     |0.7702    | 35                 |
-|X           |normal learning 1d |  CIFAR10   | 8 x 8      |  16                |6304138         |77.01     |0.7054    | 37                 |
-|O           |normal learning 1d |  CIFAR10   | 4 x 4      |  65                |6268042         |-         |-         | -                  |
-|X           |normal learning 1d |  CIFAR10   | 4 x 4      |  64                |6267274         |-         |-         | -                  |
+|O           |normal learning 1d |  CIFAR10   | 8 x 8      |  17 (= 4 X 4 + 1)  |6304906         |0.7554    |0.7702    | 35                 |
+|X           |normal learning 1d |  CIFAR10   | 8 x 8      |  16                |6304138         |0.7701    |0.7054    | 37                 |
+|O           |normal learning 1d |  CIFAR10   | 4 x 4      |  65                |6268042         |0.7490    |0.7588    | 32                 |
+|X           |normal learning 1d |  CIFAR10   | 4 x 4      |  64                |6267274         |0.7870    |0.6486    | 48                 |
 

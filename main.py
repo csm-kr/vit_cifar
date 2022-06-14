@@ -60,7 +60,7 @@ def main():
     # 5. ** model **
     # num_params : 6.3 M (6304906)
     model = ViT(dim=384, mlp_dim=384, num_heads=12, num_layers=7,
-                patch_size=4, image_size=32, is_cls_token=True,
+                patch_size=4, image_size=32, is_cls_token=False,
                 dropout_ratio=0.0, num_classes=10).to(device)
 
     # 6. ** criterion **
