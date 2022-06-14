@@ -1,31 +1,25 @@
+import time
 import torch
 import visdom
-import torch.nn as nn
 import argparse
+import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision.datasets.cifar import CIFAR10
-from model_for_cifar import VisionTransformer
-import torch.optim as optim
-import time
 import torchvision.transforms as tfs
-from label_smooth_CE import LabelSmoothingCrossEntropyLoss
-from auto_augment import CIFAR10Policy
-import warmup_scheduler
-import numpy as np
-from model_for_cifar import VisionTransformer
+from model_new import ViT
 
 
 def main():
-    # 1. argparser
+    # 1. ** argparser **
     parer = argparse.ArgumentParser()
-    parer.add_argument('--epoch', type=int, default=200)
+    parer.add_argument('--epoch', type=int, default=50)
     parer.add_argument('--batch_size', type=int, default=128)
     parer.add_argument('--lr', type=float, default=0.001)
     parer.add_argument('--step_size', type=int, default=100)
     parer.add_argument('--root', type=str, default='D:\data\CIFAR10')
     ops = parer.parse_args()
 
-    # 2. device
+    # 2. ** device **
     device = torch.device('cuda:{}'.format(0) if torch.cuda.is_available() else 'cpu')
 
     # 3. ** visdom **
@@ -35,7 +29,7 @@ def main():
     transform_cifar = tfs.Compose([
         tfs.RandomCrop(32, padding=4),
         tfs.RandomHorizontalFlip(),
-        CIFAR10Policy(),
+        # CIFAR10Policy(),
         tfs.ToTensor(),
         tfs.Normalize(mean=(0.4914, 0.4822, 0.4465),
                       std=(0.2023, 0.1994, 0.2010)),
@@ -63,52 +57,31 @@ def main():
                              shuffle=False,
                              batch_size=ops.batch_size)
 
-    # ** 5. model **
-    model = VisionTransformer(image_size=32, dim=384, heads=12, layers=7, mlp_size=384, patch_size=8).to(device)
-
+    # 5. ** model **
     # num_params : 6.3 M (6304906)
-    from model_new import ViT
     model = ViT(dim=384, mlp_dim=384, num_heads=12, num_layers=7,
-                patch_size=8, image_size=32, is_cls_token=True,
+                patch_size=8, image_size=32, is_cls_token=False,
                 dropout_ratio=0.0, num_classes=10).to(device)
 
-    # from model import ViT
-    # model = ViT(patch_size=8,
-    #             image_size=32,
-    #             num_layers=7,
-    #             dim=384,
-    #             mlp_dim=384,
-    #             num_heads=4,
-    #             dropout_ratio=0.1,
-    #             num_classes=10,
-    #             is_cls_token=True).to(device)
+    # 6. ** criterion **
+    criterion = nn.CrossEntropyLoss()
 
-    # ** 6. criterion **
-    # criterion = nn.CrossEntropyLoss()
-    criterion = LabelSmoothingCrossEntropyLoss(classes=10, smoothing=0.1)
-
-    # ** 7. optimizer **
+    # 7. ** optimizer **
     optimizer = torch.optim.Adam(model.parameters(),
                                  lr=ops.lr,
                                  betas=(0.9, 0.999),
                                  weight_decay=5e-5)
 
-    # ** scheduler **
-    base_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=ops.epoch, eta_min=1e-5)
-    scheduler = warmup_scheduler.GradualWarmupScheduler(optimizer,
-                                                        multiplier=1.,
-                                                        total_epoch=5,
-                                                        after_scheduler=base_scheduler)
+    # 8. ** scheduler **
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=ops.epoch, eta_min=1e-5)
 
-    # ** training **
+    # 9. ** training **
     print("training...")
     for epoch in range(ops.epoch):
 
         model.train()
         tic = time.time()
-        # 11. train
         for idx, (img, target) in enumerate(train_loader):
-
             img = img.to(device)  # [N, 3, 32, 32]
             target = target.to(device)  # [N]
             # output, attn_mask = model(img, True)  # [N, 10]
@@ -176,7 +149,7 @@ def main():
                               lr,
                               time.time() - tic))
 
-        # ** test **
+        # 10. ** test **
         print('Validation of epoch [{}]'.format(epoch))
         model.eval()
         correct = 0
