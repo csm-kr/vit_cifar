@@ -28,4 +28,7 @@ The goal of this repo is to find the analysis of various components of ViT (e.g.
 |O           |normal learning 1d |  CIFAR10   | 4 x 4      |  65                |6268042         |0.7490    |0.7588    | 32                 |      | 
 |X           |normal learning 1d |  CIFAR10   | 4 x 4      |  64                |6267274         |0.7870    |0.6486    | 48                 |      |  
 |X           |conv pos embedding |  CIFAR10   | 4 x 4      |  64                |6269258         |0.7933    |0.6268    | 39                 | 27s  |
+|X           |conv pos embedding |  CIFAR10   | 4 x 4      |  64                |6269258         |0.7907    |0.6268    | 49                 | 27s  |
+
+|X           |normal learning 1d |  CIFAR10   | 4 x 4      |  64                |5240458         |0.7907    |0.6268    | 49                 | 27s  |
 
