@@ -21,10 +21,11 @@ The goal of this repo is to find the analysis of various components of ViT (e.g.
           
 ### Results of ablation study at cifar10  
 
-|Cls token   | Pos embedding     |  Dataset   | Patch size | Length of sequence |  # params      | Accuracy |Test loss | overfitting epoch  |
-|------------|-------------------| ---------- | ---------- | ------------------ |----------------|----------|----------| -------------------|
-|O           |normal learning 1d |  CIFAR10   | 8 x 8      |  17 (= 4 X 4 + 1)  |6304906         |0.7554    |0.7702    | 35                 |
-|X           |normal learning 1d |  CIFAR10   | 8 x 8      |  16                |6304138         |0.7701    |0.7054    | 37                 |
-|O           |normal learning 1d |  CIFAR10   | 4 x 4      |  65                |6268042         |0.7490    |0.7588    | 32                 |
-|X           |normal learning 1d |  CIFAR10   | 4 x 4      |  64                |6267274         |0.7870    |0.6486    | 48                 |
+|Cls token   | Pos embedding     |  Dataset   | Patch size | Length of sequence |  # params      | Accuracy |Test loss | overfitting epoch  | Time | 
+|------------|-------------------| ---------- | ---------- | ------------------ |----------------|----------|----------| -------------------| -----|
+|O           |normal learning 1d |  CIFAR10   | 8 x 8      |  17 (= 4 X 4 + 1)  |6304906         |0.7554    |0.7702    | 35                 | s    |
+|X           |normal learning 1d |  CIFAR10   | 8 x 8      |  16                |6304138         |0.7701    |0.7054    | 37                 |      |
+|O           |normal learning 1d |  CIFAR10   | 4 x 4      |  65                |6268042         |0.7490    |0.7588    | 32                 |      | 
+|X           |normal learning 1d |  CIFAR10   | 4 x 4      |  64                |6267274         |0.7870    |0.6486    | 48                 |      |  
+|X           |conv pos embedding |  CIFAR10   | 4 x 4      |  64                |6269258         |0.7933    |0.6268    | 39                 | 27s  |
 

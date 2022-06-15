@@ -6,7 +6,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision.datasets.cifar import CIFAR10
 import torchvision.transforms as tfs
-from model_new import ViT
+# from model_new import ViT
+from model_moa import ViT
 
 
 def main():
