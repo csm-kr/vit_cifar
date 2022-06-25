@@ -10,25 +10,25 @@ class EmbeddingLayer(nn.Module):
         self.num_patches = (image_size // patch_size) ** 2                                    # L
         self.cls_token = nn.Parameter(torch.zeros(1, 1, dim)) if is_cls_token else None       # [1, 1, D]
         self.patch_embedding_projection = nn.Conv2d(3, dim, patch_size, stride=patch_size)    # Non overlap projection
-        # self.position_embedding = nn.Parameter(torch.empty(1, (self.num_patches + 1), dim)) if is_cls_token \
-        #     else nn.Parameter(torch.empty(1, self.num_patches, dim))                          # [1, N (+1), D]
-        # torch.nn.init.normal_(self.position_embedding, std=.02)
+        self.position_embedding = nn.Parameter(torch.empty(1, (self.num_patches + 1), dim)) if is_cls_token \
+            else nn.Parameter(torch.empty(1, self.num_patches, dim))                          # [1, N (+1), D]
+        torch.nn.init.normal_(self.position_embedding, std=.02)
 
         self.pos_dropout = nn.Dropout(dropout_ratio)
         self.is_cls_token = is_cls_token
 
         # ===================== new positional embedding =====================
-        self.position_embedding_ = nn.Parameter(torch.empty([1, 1, image_size // patch_size, image_size // patch_size]))
-        torch.nn.init.normal_(self.position_embedding_, std=.2)
-        self.pos_embed_conv = nn.Conv2d(1, self.dim, kernel_size=2, stride=2, padding=0)
+        # self.position_embedding_ = nn.Parameter(torch.empty([1, 1, image_size // patch_size, image_size // patch_size]))
+        # torch.nn.init.normal_(self.position_embedding_, std=.2)
+        # self.pos_embed_conv = nn.Conv2d(1, self.dim, kernel_size=2, stride=2, padding=0)
+        # self.position_embedding = nn.Parameter(self.make_conv_position_embedding())
         # ===================== new positional embedding =====================
-        self.position_embedding = nn.Parameter(self.make_conv_position_embedding())
 
-    def make_conv_position_embedding(self):
-        pos_embedding_conv = self.pos_embed_conv(self.position_embedding_)  # [1, 384, 8, 8]
-        pos_embedding_conv = torch.nn.functional.interpolate(pos_embedding_conv, (8, 8))
-        pos_embedding_conv = pos_embedding_conv.permute(0, 2, 3, 1).view(1, self.num_patches, self.dim)
-        return pos_embedding_conv
+    # def make_conv_position_embedding(self):
+    #     pos_embedding_conv = self.pos_embed_conv(self.position_embedding_)  # [1, 384, 8, 8]
+    #     pos_embedding_conv = torch.nn.functional.interpolate(pos_embedding_conv, (8, 8))
+    #     pos_embedding_conv = pos_embedding_conv.permute(0, 2, 3, 1).view(1, self.num_patches, self.dim)
+    #     return pos_embedding_conv
 
     def forward(self, x):
         batch_size = x.size(0)
@@ -59,6 +59,60 @@ class EmbeddingLayer(nn.Module):
         x += self.position_embedding
         x = self.pos_dropout(x)
         return x
+
+
+class MultiOrderedAttention(nn.Module):
+    def __init__(self, dim, num_heads, dropout_ratio, num_orders=4):
+        super().__init__()
+
+        self.num_orders = num_orders
+        self.order1_nn = nn.Linear(dim, dim // num_orders, bias=True)
+        self.order2_nn = nn.Linear(dim, dim // num_orders, bias=True)
+        self.order3_nn = nn.Linear(dim, dim // num_orders, bias=True)
+        self.order4_nn = nn.Linear(dim, dim // num_orders, bias=True)
+
+        self.order_att1 = MultiHeadAttention(dim=dim//num_orders, num_heads=num_heads, dropout_ratio=dropout_ratio)
+        self.order_att2 = MultiHeadAttention(dim=dim//num_orders, num_heads=num_heads, dropout_ratio=dropout_ratio)
+        self.order_att3 = MultiHeadAttention(dim=dim//num_orders, num_heads=num_heads, dropout_ratio=dropout_ratio)
+        self.order_att4 = MultiHeadAttention(dim=dim//num_orders, num_heads=num_heads, dropout_ratio=dropout_ratio)
+
+        self.out_nn = nn.Linear(dim, dim, bias=True)
+
+    def perm_orders(self, x):
+        num_patches = x.size(1)
+        x1 = x
+        num_one_side_elements = int(num_patches ** 0.5)
+        # ** reverse order **
+        new_order_indices = torch.flip(torch.arange(num_patches).unsqueeze(0), dims=(0, 1)).squeeze()
+        # print(new_order_indices) tensor([15, 14, 13, 12, 11, 10,  9,  8,  7,  6,  5,  4,  3,  2,  1,  0])
+        x2 = x[:, new_order_indices, :]
+        # **  vertical order (from up to down) **
+        new_order_indices = torch.arange(num_patches).view(num_one_side_elements, num_one_side_elements).permute(1, 0).contiguous().view(-1)
+        # print(new_order_indices) tensor([ 0,  4,  8, 12,  1,  5,  9, 13,  2,  6, 10, 14,  3,  7, 11, 15])
+        x3 = x[:, new_order_indices, :]
+        # **  vertical order (from down to up) **
+        new_order_indices = torch.arange(num_patches).view(num_one_side_elements, num_one_side_elements).permute(1, 0).contiguous().view(-1)
+        new_order_indices = torch.flip(new_order_indices.unsqueeze(0), dims=(0, 1)).squeeze()
+        # print(new_order_indices) tensor([15, 11,  7,  3, 14, 10,  6,  2, 13,  9,  5,  1, 12,  8,  4,  0])
+        x4 = x[:, new_order_indices, :]
+        return [x1, x2, x3, x4]
+
+    def forward(self, x):
+        x1, x2, x3, x4 = self.perm_orders(x)
+
+        x1 = self.order1_nn(x1)
+        x2 = self.order1_nn(x2)
+        x3 = self.order1_nn(x3)
+        x4 = self.order1_nn(x4)
+
+        x1, _ = self.order_att1(x1)
+        x2, _ = self.order_att2(x2)
+        x3, _ = self.order_att3(x3)
+        x4, _ = self.order_att4(x4)
+
+        x = torch.cat([x1, x2, x3, x4], dim=-1)
+        x = self.out_nn(x)
+        return x, 0
 
 
 class MultiHeadAttention(nn.Module):
@@ -118,7 +172,8 @@ class EncoderLayer(nn.Module):
     def __init__(self, dim, mlp_dim, num_heads, dropout_ratio=0.1):
         super().__init__()
         self.layer_norm1 = nn.LayerNorm(dim)
-        self.msa = MultiHeadAttention(dim, num_heads, dropout_ratio)
+        self.msa = MultiOrderedAttention(dim, num_heads, dropout_ratio)
+        # self.msa = MultiHeadAttention(dim, num_heads, dropout_ratio)
         self.layer_norm2 = nn.LayerNorm(dim)
         self.mlp = nn.Sequential(
             nn.Linear(dim, mlp_dim),
@@ -197,7 +252,7 @@ if __name__ == '__main__':
               patch_size=4, image_size=32, is_cls_token=False,
               dropout_ratio=0.1, num_classes=10)
 
-    # x, attn_mask = vit(x, True)
+    x = vit(x, False)
     # print(x.size())
     # print(attn_mask.size())
     #
@@ -207,4 +262,8 @@ if __name__ == '__main__':
     # attn_mask_numpy_batch_0 = cv2.resize(attn_mask_numpy_batch_0, (100, 100))
     # cv2.imshow('input', attn_mask_numpy_batch_0)
     # cv2.waitKey()
+
+    x = torch.randn([3, 64, 384])
+    moa = MultiOrderedAttention(dim=384, num_heads=12, dropout_ratio=0.0)
+    print(moa(x).size())
 
