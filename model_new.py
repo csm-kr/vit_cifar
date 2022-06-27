@@ -1,5 +1,39 @@
+import math
 import torch
 import torch.nn as nn
+
+
+def positionalencoding1d(d_model, length):
+    """
+    :param d_model: dimension of the model
+    :param length: length of positions
+    :return: length*d_model position matrix
+    """
+    if d_model % 2 != 0:
+        raise ValueError("Cannot use sin/cos positional encoding with "
+                         "odd dim (got dim={:d})".format(d_model))
+    pe = torch.zeros(length, d_model)
+    position = torch.arange(0, length).unsqueeze(1)
+    div_term = torch.exp((torch.arange(0, d_model, 2, dtype=torch.float) *
+                         -(math.log(10000.0) / d_model)))
+    pe[:, 0::2] = torch.sin(position.float() * div_term)
+    pe[:, 1::2] = torch.cos(position.float() * div_term)
+    # [length, d_model]
+    return pe
+
+
+def cosine_simirarity(positinal_embeddings):
+    pe = positinal_embeddings  # [length, dim]
+    pe = pe.squeeze(0)
+    assert len(pe.size()) == 2, 'pe must have 2-dim shape.'
+    for pe_compoent in pe:
+        nn.functional.cosine_similarity(pe_compoent)
+
+
+
+
+
+
 
 
 class EmbeddingLayer(nn.Module):
@@ -10,6 +44,12 @@ class EmbeddingLayer(nn.Module):
         self.num_patches = (image_size // patch_size) ** 2                                    # L
         self.cls_token = nn.Parameter(torch.zeros(1, 1, dim)) if is_cls_token else None       # [1, 1, D]
         self.patch_embedding_projection = nn.Conv2d(3, dim, patch_size, stride=patch_size)    # Non overlap projection
+
+        # # sinusoid PE
+        # self.position_embedding = positionalencoding1d(dim, self.num_patches + 1).unsqueeze(0) if is_cls_token \
+        #     else positionalencoding1d(dim, self.num_patches + 1).unsqueeze(0)  # [1, N (+1), D]
+
+        # learnable PE
         self.position_embedding = nn.Parameter(torch.empty(1, (self.num_patches + 1), dim)) if is_cls_token \
             else nn.Parameter(torch.empty(1, self.num_patches, dim))                          # [1, N (+1), D]
         torch.nn.init.normal_(self.position_embedding, std=.02)
@@ -26,6 +66,8 @@ class EmbeddingLayer(nn.Module):
             x = torch.cat((cls_tokens, x), dim=1)                                             # [B, 1 + N, D]
             # cls_token [cls_token; x_p^1E; x_p^2E; ..., ;x_p^N]
         # else [x_p^1E; x_p^2E; ..., ;x_p^N]
+        device = x.get_device()
+        self.position_embedding = self.position_embedding.to(device)
         x += self.position_embedding
         x = self.pos_dropout(x)
         return x
