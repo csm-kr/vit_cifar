@@ -36,7 +36,16 @@ The goal of this repo is to find the analysis of various components of ViT (e.g.
 | #   |Cls token   | Pos embedding     |  Dataset   | Patch size | Length of sequence |  # params      | Accuracy |Test loss | overfitting epoch  | Time | 
 |-----|------------|-------------------| ---------- | ---------- | ------------------ |----------------|----------|----------| -------------------| -----|
 |1    | X          |normal learning 1d |  CIFAR10   | 4 x 4      |  64                |6267274         |0.7878    |0.6486    | 45                 | 9-10s|  
-|1    | O          |normal learning 1d |  CIFAR10   | 4 x 4      |  64                |6267274         |0.7878    |0.6486    | 48                 | 10s  |  
-|2    | O          |sinusoid pos embed |  CIFAR10   | 4 x 4      |  64                |                |0.7878    |0.6486    | 48                 | 10s  |  
+|2    | O          |normal learning 1d |  CIFAR10   | 4 x 4      |  65                |6268042         |0.7408    |0.7883    | 31                 | 9-10s|  
+|3    | O          |sinusoid pos embed |  CIFAR10   | 4 x 4      |  65                |6243082         |0.7601    |0.7078    | 30                 | 9-10s|  
+|4    | O          |normal learning 1d |  CIFAR10   | 4 x 4      |  65                |6268042         |0.7365    |0.7760    | 29                 | 9-10s|  
 
 ![](./figures/comparison_exp1.png)
+
+### cosime simirarity test
+
+1. Sinusoid 1d
+![](./figures/sinusoid_cosine_simirarity.JPG)
+
+1. Sinusoid 2d
+![](./figures/sinusoid_cosine_simirarity_2d.JPG)
