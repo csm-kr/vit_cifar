@@ -22,19 +22,29 @@ def positionalencoding1d(d_model, length):
     return pe
 
 
-def cosine_simirarity(positinal_embeddings):
-    pe = positinal_embeddings  # [length, dim]
-    pe = pe.squeeze(0)
-    assert len(pe.size()) == 2, 'pe must have 2-dim shape.'
-    for pe_compoent in pe:
-        nn.functional.cosine_similarity(pe_compoent)
-
-
-
-
-
-
-
+def positionalencoding2d(d_model, height, width):
+    """
+    :param d_model: dimension of the model
+    :param height: height of the positions
+    :param width: width of the positions
+    :return: d_model*height*width position matrix
+    """
+    if d_model % 4 != 0:
+        raise ValueError("Cannot use sin/cos positional encoding with "
+                         "odd dimension (got dim={:d})".format(d_model))
+    pe = torch.zeros(d_model, height, width)
+    # Each dimension use half of d_model
+    d_model = int(d_model / 2)
+    div_term = torch.exp(torch.arange(0., d_model, 2) *
+                         -(math.log(10000.0) / d_model))
+    pos_w = torch.arange(0., width).unsqueeze(1)
+    pos_h = torch.arange(0., height).unsqueeze(1)
+    pe[0:d_model:2, :, :] = torch.sin(pos_w * div_term).transpose(0, 1).unsqueeze(1).repeat(1, height, 1)
+    pe[1:d_model:2, :, :] = torch.cos(pos_w * div_term).transpose(0, 1).unsqueeze(1).repeat(1, height, 1)
+    pe[d_model::2, :, :] = torch.sin(pos_h * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, width)
+    pe[d_model + 1::2, :, :] = torch.cos(pos_h * div_term).transpose(0, 1).unsqueeze(2).repeat(1, 1, width)
+    pe = pe.view(d_model * 2, width * height).permute(1, 0)
+    return pe
 
 class EmbeddingLayer(nn.Module):
     def __init__(self, dim, patch_size, image_size, dropout_ratio=0.1, is_cls_token=False):
@@ -47,12 +57,16 @@ class EmbeddingLayer(nn.Module):
 
         # # sinusoid PE
         # self.position_embedding = positionalencoding1d(dim, self.num_patches + 1).unsqueeze(0) if is_cls_token \
-        #     else positionalencoding1d(dim, self.num_patches + 1).unsqueeze(0)  # [1, N (+1), D]
+        #     else positionalencoding1d(dim, self.num_patches).unsqueeze(0)  # [1, N (+1), D]
 
-        # learnable PE
-        self.position_embedding = nn.Parameter(torch.empty(1, (self.num_patches + 1), dim)) if is_cls_token \
-            else nn.Parameter(torch.empty(1, self.num_patches, dim))                          # [1, N (+1), D]
-        torch.nn.init.normal_(self.position_embedding, std=.02)
+        # sinusoid PE 2d
+        self.position_embedding = positionalencoding2d(dim, self.num_patches + 1, self.num_patches + 1).unsqueeze(0) if is_cls_token \
+            else positionalencoding2d(dim, (image_size // patch_size), (image_size // patch_size)).unsqueeze(0)  # [1, N (+1), D]
+
+        # # learnable PE
+        # self.position_embedding = nn.Parameter(torch.empty(1, (self.num_patches + 1), dim)) if is_cls_token \
+        #     else nn.Parameter(torch.empty(1, self.num_patches, dim))                          # [1, N (+1), D]
+        # torch.nn.init.normal_(self.position_embedding, std=.02)
 
         self.pos_dropout = nn.Dropout(dropout_ratio)
         self.is_cls_token = is_cls_token
@@ -68,7 +82,7 @@ class EmbeddingLayer(nn.Module):
         # else [x_p^1E; x_p^2E; ..., ;x_p^N]
         device = x.get_device()
         self.position_embedding = self.position_embedding.to(device)
-        x += self.position_embedding
+        x *= self.position_embedding
         x = self.pos_dropout(x)
         return x
 
