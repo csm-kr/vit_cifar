@@ -101,9 +101,63 @@ class MultiOrderedAttention(nn.Module):
         x1, x2, x3, x4 = self.perm_orders(x)
 
         x1 = self.order1_nn(x1)
-        x2 = self.order1_nn(x2)
-        x3 = self.order1_nn(x3)
-        x4 = self.order1_nn(x4)
+        x2 = self.order2_nn(x2)
+        x3 = self.order3_nn(x3)
+        x4 = self.order4_nn(x4)
+
+        x1, _ = self.order_att1(x1)
+        x2, _ = self.order_att2(x2)
+        x3, _ = self.order_att3(x3)
+        x4, _ = self.order_att4(x4)
+
+        x = torch.cat([x1, x2, x3, x4], dim=-1)
+        x = self.out_nn(x)
+        return x, 0
+
+
+class MOSA(nn.Module):
+    def __init__(self, dim, num_heads, dropout_ratio, num_orders=4):
+        super().__init__()
+
+        self.num_orders = num_orders
+        self.order1_nn = nn.Linear(dim, dim // num_orders, bias=True)
+        self.order2_nn = nn.Linear(dim, dim // num_orders, bias=True)
+        self.order3_nn = nn.Linear(dim, dim // num_orders, bias=True)
+        self.order4_nn = nn.Linear(dim, dim // num_orders, bias=True)
+
+        self.order_att1 = MultiOrderHeadAttention(dim=dim//num_orders, num_heads=num_heads//num_orders, dropout_ratio=dropout_ratio)
+        self.order_att2 = MultiOrderHeadAttention(dim=dim//num_orders, num_heads=num_heads//num_orders, dropout_ratio=dropout_ratio)
+        self.order_att3 = MultiOrderHeadAttention(dim=dim//num_orders, num_heads=num_heads//num_orders, dropout_ratio=dropout_ratio)
+        self.order_att4 = MultiOrderHeadAttention(dim=dim//num_orders, num_heads=num_heads//num_orders, dropout_ratio=dropout_ratio)
+
+        self.out_nn = nn.Linear(dim, dim, bias=True)
+
+    def perm_orders(self, x):
+        num_patches = x.size(1)
+        x1 = x
+        num_one_side_elements = int(num_patches ** 0.5)
+        # ** reverse order **
+        new_order_indices = torch.flip(torch.arange(num_patches).unsqueeze(0), dims=(0, 1)).squeeze()
+        # print(new_order_indices) tensor([15, 14, 13, 12, 11, 10,  9,  8,  7,  6,  5,  4,  3,  2,  1,  0])
+        x2 = x[:, new_order_indices, :]
+        # **  vertical order (from up to down) **
+        new_order_indices = torch.arange(num_patches).view(num_one_side_elements, num_one_side_elements).permute(1, 0).contiguous().view(-1)
+        # print(new_order_indices) tensor([ 0,  4,  8, 12,  1,  5,  9, 13,  2,  6, 10, 14,  3,  7, 11, 15])
+        x3 = x[:, new_order_indices, :]
+        # **  vertical order (from down to up) **
+        new_order_indices = torch.arange(num_patches).view(num_one_side_elements, num_one_side_elements).permute(1, 0).contiguous().view(-1)
+        new_order_indices = torch.flip(new_order_indices.unsqueeze(0), dims=(0, 1)).squeeze()
+        # print(new_order_indices) tensor([15, 11,  7,  3, 14, 10,  6,  2, 13,  9,  5,  1, 12,  8,  4,  0])
+        x4 = x[:, new_order_indices, :]
+        return [x1, x2, x3, x4]
+
+    def forward(self, x):
+        x1, x2, x3, x4 = self.perm_orders(x)
+
+        x1 = self.order1_nn(x1)
+        x2 = self.order2_nn(x2)
+        x3 = self.order3_nn(x3)
+        x4 = self.order4_nn(x4)
 
         x1, _ = self.order_att1(x1)
         x2, _ = self.order_att2(x2)
@@ -168,11 +222,63 @@ class MultiHeadAttention(nn.Module):
         return x, attn
 
 
+class MultiOrderHeadAttention(nn.Module):
+    def __init__(self, dim, num_heads, dropout_ratio=0.1):
+        super().__init__()
+        self.num_heads = num_heads
+        self.dim = dim
+        self.scale = dim ** -0.5                          # 1/sqrt(dim)
+
+        self.q = nn.Linear(dim, dim, bias=True)                         # Wq
+        self.k = nn.Linear(dim, dim, bias=True)                         # Wk
+        self.v = nn.Linear(dim, dim, bias=True)                         # Wv
+        # self.o = nn.Linear(dim, dim)                # Wo
+
+        self.attn_dropout = nn.Dropout(dropout_ratio)
+        # self.multi_head_dropout = nn.Dropout(dropout_ratio)
+
+        self.init_layers()
+
+    def init_layers(self):
+        torch.nn.init.xavier_uniform_(self.q.weight)
+        torch.nn.init.zeros_(self.q.bias)
+        torch.nn.init.xavier_uniform_(self.k.weight)
+        torch.nn.init.zeros_(self.k.bias)
+        torch.nn.init.xavier_uniform_(self.v.weight)
+        torch.nn.init.zeros_(self.v.bias)
+
+    def forward(self, x):
+        assert self.dim % self.num_heads == 0, 'dim 은 반드시 head 로 나누어 떨어져야 한다. {} % {} = {}'.\
+            format(self.dim, self.num_heads, self.dim % self.num_heads)
+
+        b, l, _, h = *x.shape, self.num_heads                        # b: batch, l : length, h : head
+        h_d = int(self.dim / self.num_heads)
+
+        q = self.q(x)
+        k = self.k(x)
+        v = self.v(x)
+
+        q = q.permute(2, 0, 1).view(h, h_d, b, l).permute(2, 0, 3, 1)  # B, H, L, H_D
+        k = k.permute(2, 0, 1).view(h, h_d, b, l).permute(2, 0, 3, 1)  # B, H, L, H_D
+        v = v.permute(2, 0, 1).view(h, h_d, b, l).permute(2, 0, 3, 1)  # B, H, L, H_D
+
+        dots = torch.einsum('bhid,bhjd->bhij', q, k) * self.scale      # B, H, L, L
+        attn = dots.softmax(dim=-1)
+        x = torch.einsum('bhij,bhjd->bhid', attn, v)                   # B, H, L, H_D
+        x = self.attn_dropout(x)
+
+        x = x.permute(0, 2, 1, 3).reshape(b, l, h * h_d)               # B, L, D
+        # x = self.o(x)
+        # x = self.multi_head_dropout(x)
+        return x, attn
+
+
 class EncoderLayer(nn.Module):
     def __init__(self, dim, mlp_dim, num_heads, dropout_ratio=0.1):
         super().__init__()
         self.layer_norm1 = nn.LayerNorm(dim)
-        self.msa = MultiOrderedAttention(dim, num_heads, dropout_ratio)
+        # self.msa = MultiOrderedAttention(dim, num_heads, dropout_ratio)
+        self.msa = MOSA(dim, num_heads, dropout_ratio)
         # self.msa = MultiHeadAttention(dim, num_heads, dropout_ratio)
         self.layer_norm2 = nn.LayerNorm(dim)
         self.mlp = nn.Sequential(
@@ -253,17 +359,20 @@ if __name__ == '__main__':
               dropout_ratio=0.1, num_classes=10)
 
     x = vit(x, False)
-    # print(x.size())
-    # print(attn_mask.size())
-    #
-    # attn_mask[0] /= attn_mask[0].max()
-    # attn_mask_numpy_batch_0 = attn_mask[0].detach().cpu().numpy()
-    # import cv2
-    # attn_mask_numpy_batch_0 = cv2.resize(attn_mask_numpy_batch_0, (100, 100))
-    # cv2.imshow('input', attn_mask_numpy_batch_0)
-    # cv2.waitKey()
+    print(x.size())
 
-    x = torch.randn([3, 64, 384])
-    moa = MultiOrderedAttention(dim=384, num_heads=12, dropout_ratio=0.0)
-    print(moa(x).size())
+    # # print(attn_mask.size())
+    # #
+    # # attn_mask[0] /= attn_mask[0].max()
+    # # attn_mask_numpy_batch_0 = attn_mask[0].detach().cpu().numpy()
+    # # import cv2
+    # # attn_mask_numpy_batch_0 = cv2.resize(attn_mask_numpy_batch_0, (100, 100))
+    # # cv2.imshow('input', attn_mask_numpy_batch_0)
+    # # cv2.waitKey()
+    #
+    # x = torch.randn([3, 64, 384])
+    # # oa = MultiOrderedAttention(dim=384, num_heads=12, dropout_ratio=0.0)
+    # moa = MOSA(dim=384, num_heads=12, dropout_ratio=0.0)
+    # x, _ = moa(x)
+    # print(x.size())
 

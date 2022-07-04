@@ -9,6 +9,8 @@ import torchvision.transforms as tfs
 # from model_new import ViT
 # from model_moa import ViT
 from model_new import ViT
+from model_moa import ViT
+# from model_relative import ViT
 
 
 def main():
@@ -60,10 +62,27 @@ def main():
                              batch_size=ops.batch_size)
 
     # 5. ** model **
-    # num_params : 6.3 M (6304906)
+    # # num_params : 6.3 M (6304906)
     model = ViT(dim=384, mlp_dim=384, num_heads=12, num_layers=7,
                 patch_size=4, image_size=32, is_cls_token=False,
                 dropout_ratio=0.0, num_classes=10).to(device)
+
+    # from model_convit import VisionTransformer
+    # model = VisionTransformer(img_size=32,
+    #                            patch_size=4,
+    #                            in_chans=3,
+    #                            num_classes=10,
+    #                            embed_dim=384,
+    #                            depth=7,
+    #                            num_heads=12,
+    #                            mlp_ratio=1.,
+    #                            qkv_bias=False,
+    #                            qk_scale=None,
+    #                            drop_rate=0.,
+    #                            attn_drop_rate=0.,
+    #                  drop_path_rate=0., hybrid_backbone=None, norm_layer=nn.LayerNorm, global_pool=None,
+    #                  local_up_to_layer=10, locality_strength=1., use_pos_embed=True).to(device)
+
 
     # 6. ** criterion **
     criterion = nn.CrossEntropyLoss()

@@ -1,6 +1,31 @@
 import math
 import torch
 import torch.nn as nn
+from timm.models.layers import trunc_normal_
+from sklearn.utils.extmath import cartesian
+import numpy as np
+
+def cdist(a, b):
+    differences = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2
+    distances = differences.sqrt()
+    # print(distances)
+    ret = torch.exp(distances) ** -0.33 + 1
+    return ret
+
+
+def positional_embedding(length=64):
+    all_img_locations = torch.from_numpy(cartesian([np.arange(length ** 0.5),
+                                                    np.arange(length ** 0.5)]))
+
+    dist = []
+    for coords in all_img_locations:
+        for coords_i in all_img_locations:
+            dist.append(cdist(coords, coords_i))
+    dist_map = torch.stack(dist, dim=0).view(length, length)  # [64, 64]
+    dist_map = dist_map.type(torch.float32)
+    # dist_map = dist_map.expand([1, length, d_model])
+
+    return dist_map
 
 
 def positionalencoding1d(d_model, length):
@@ -46,6 +71,7 @@ def positionalencoding2d(d_model, height, width):
     pe = pe.view(d_model * 2, width * height).permute(1, 0)
     return pe
 
+
 class EmbeddingLayer(nn.Module):
     def __init__(self, dim, patch_size, image_size, dropout_ratio=0.1, is_cls_token=False):
         super().__init__()
@@ -55,21 +81,29 @@ class EmbeddingLayer(nn.Module):
         self.cls_token = nn.Parameter(torch.zeros(1, 1, dim)) if is_cls_token else None       # [1, 1, D]
         self.patch_embedding_projection = nn.Conv2d(3, dim, patch_size, stride=patch_size)    # Non overlap projection
 
-        # # sinusoid PE
+        # # # sinusoid PE 1d
         # self.position_embedding = positionalencoding1d(dim, self.num_patches + 1).unsqueeze(0) if is_cls_token \
         #     else positionalencoding1d(dim, self.num_patches).unsqueeze(0)  # [1, N (+1), D]
 
-        # sinusoid PE 2d
-        self.position_embedding = positionalencoding2d(dim, self.num_patches + 1, self.num_patches + 1).unsqueeze(0) if is_cls_token \
-            else positionalencoding2d(dim, (image_size // patch_size), (image_size // patch_size)).unsqueeze(0)  # [1, N (+1), D]
+        # # sinusoid PE 2d
+        # self.position_embedding = positionalencoding2d(dim, self.num_patches + 1, self.num_patches + 1).unsqueeze(0) if is_cls_token \
+        #     else positionalencoding2d(dim, (image_size // patch_size), (image_size // patch_size)).unsqueeze(0)  # [1, N (+1), D]
 
-        # # learnable PE
-        # self.position_embedding = nn.Parameter(torch.empty(1, (self.num_patches + 1), dim)) if is_cls_token \
-        #     else nn.Parameter(torch.empty(1, self.num_patches, dim))                          # [1, N (+1), D]
+        # # sinusoid PE distance
+        # self.position_embedding = positional_embedding(length=self.num_patches + 1) if is_cls_token \
+        #     else positional_embedding(length=self.num_patches)  # [1, N (+1)]
+
+        # learnable PE
+        self.position_embedding = nn.Parameter(torch.empty(1, (self.num_patches + 1), dim)) if is_cls_token \
+            else nn.Parameter(torch.empty(1, self.num_patches, dim))                          # [1, N (+1), D]
+
         # torch.nn.init.normal_(self.position_embedding, std=.02)
+        trunc_normal_(self.position_embedding, std=.02)
 
         self.pos_dropout = nn.Dropout(dropout_ratio)
         self.is_cls_token = is_cls_token
+
+        trunc_normal_(self.cls_token, std=.02)
 
     def forward(self, x):
         batch_size = x.size(0)
@@ -82,7 +116,11 @@ class EmbeddingLayer(nn.Module):
         # else [x_p^1E; x_p^2E; ..., ;x_p^N]
         device = x.get_device()
         self.position_embedding = self.position_embedding.to(device)
-        x *= self.position_embedding
+
+        # x = x.permute(0, 2, 1) @ self.position_embedding  # [B, D, L]
+        # x = x.permute(0, 2, 1)                            # [B, D, L]
+
+        x += self.position_embedding
         x = self.pos_dropout(x)
         return x
 
@@ -94,10 +132,10 @@ class MultiHeadAttention(nn.Module):
         self.dim = dim
         self.scale = dim ** -0.5                          # 1/sqrt(dim)
 
-        self.q = nn.Linear(dim, dim, bias=True)           # Wq
-        self.k = nn.Linear(dim, dim, bias=True)           # Wk
-        self.v = nn.Linear(dim, dim, bias=True)           # Wv
-        self.o = nn.Linear(dim, dim)                      # Wo
+        self.q = nn.Linear(dim, dim, bias=False)           # Wq
+        self.k = nn.Linear(dim, dim, bias=False)           # Wk
+        self.v = nn.Linear(dim, dim, bias=False)           # Wv
+        self.o = nn.Linear(dim, dim)                       # Wo
 
         self.attn_dropout = nn.Dropout(dropout_ratio)
         self.multi_head_dropout = nn.Dropout(dropout_ratio)
